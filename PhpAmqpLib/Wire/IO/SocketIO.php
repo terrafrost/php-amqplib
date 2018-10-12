@@ -8,6 +8,8 @@ use PhpAmqpLib\Wire\AMQPWriter;
 
 class SocketIO extends AbstractIO
 {
+    const READ_BUFFER_WAIT_INTERVAL = 100000;
+
     /** @var string */
     protected $host;
 
@@ -110,34 +112,56 @@ class SocketIO extends AbstractIO
      */
     public function read($n)
     {
+        $this->check_heartbeat();
+
         if (is_null($this->sock)) {
             throw new AMQPRuntimeException(sprintf(
                 'Socket was null! Last SocketError was: %s',
                 socket_strerror(socket_last_error())
             ));
         }
-        $res = '';
+
         $read = 0;
-        $buf = socket_read($this->sock, $n);
-        while ($read < $n && $buf !== '' && $buf !== false) {
+        $data = '';
+        $buffer = '';
+
+        while ($read < $len) {
+            $num_changed_sockets = $this->select(0, self::READ_BUFFER_WAIT_INTERVAL);
+            if ($num_changed_sockets === false) {
+                $errmsg = sprintf("socket_select() failed, reason: %s",
+                    socket_strerror(socket_last_error()));
+                throw new AMQPIOException($errmsg);
+            }
+            if ($num_changed_sockets === 0) {
+                # timeout
+            }
+
+            $buffer = socket_read($this->sock, $n);
+            if ($buffer === false) {
+                break;
+            }
+            if ($buffer === '') {
+                break;
+            }
+
             $this->check_heartbeat();
 
-            $read += mb_strlen($buf, 'ASCII');
-            $res .= $buf;
-            $buf = socket_read($this->sock, $n - $read);
+            $read += mb_strlen($buffer, 'ASCII');
+            $data .= $buffer;
+            $n -= $read;
         }
 
-        if (mb_strlen($res, 'ASCII') != $n) {
+        if (mb_strlen($data, 'ASCII') != $n) {
             throw new AMQPIOException(sprintf(
                 'Error reading data. Received %s instead of expected %s bytes',
-                mb_strlen($res, 'ASCII'),
+                mb_strlen($data, 'ASCII'),
                 $n
             ));
         }
 
         $this->last_read = microtime(true);
 
-        return $res;
+        return $data;
     }
 
     /**

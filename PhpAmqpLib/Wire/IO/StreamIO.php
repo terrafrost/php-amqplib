@@ -209,6 +209,13 @@ class StreamIO extends AbstractIO
     {
         $this->check_heartbeat();
 
+        if (is_null($this->sock)) {
+            throw new AMQPRuntimeException(sprintf(
+                'Socket was null! Last SocketError was: %s',
+                socket_strerror(socket_last_error())
+            ));
+        }
+
         $read = 0;
         $data = '';
 
