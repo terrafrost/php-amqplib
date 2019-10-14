@@ -42,8 +42,10 @@ env:
 
 script:
   - if [[ $BCMATH == "off" ]]; then
-        docker pull terrafrost/amqplib;
-        docker run -v "`pwd`:/opt/src" -w "/opt/src" --net=host terrafrost/amqplib ./vendor/bin/phpunit -d zend.enable_gc=0 --coverage-text --coverage-clover=coverage.clover;
+        docker pull php:7.2;
+        docker run -v "`pwd`:/opt/src" -w "/opt/src" --net=host terrafrost/amqplib
+            docker-php-ext-install sockets
+            && ./vendor/bin/phpunit -d zend.enable_gc=0 --coverage-text --coverage-clover=coverage.clover;
     else
         vendor/bin/phpunit -d zend.enable_gc=0 --coverage-text --coverage-clover=coverage.clover;
     fi
